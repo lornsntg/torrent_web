@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TorrentShare - Condivisione File Torrent</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <header>
+        <nav class="container">
+            <div class="logo">TorrentShare</div>
+            <div class="nav-links">
+                <a href="#" id="home-link">Home</a>
+                <a href="#" id="upload-link" style="display: none;">Carica Torrent</a>
+                <a href="#" id="admin-panel-link" style="display: none;">Admin Panel</a>
+                <a href="#" id="login-link">Login</a>
+                <a href="#" id="register-link">Registrati</a>
+                <a href="#" id="logout-link" style="display: none;">Logout</a>
+                <span id="user-info" style="display: none;"></span>
+            </div>
+        </nav>
+    </header>
+
+    <main class="container">
+        <!-- Home Page -->
+        <section id="home-page">
+            <div class="search-section">
+                <h2>Cerca Torrent</h2>
+                <form id="search-form" class="search-form">
+                    <div class="form-group">
+                        <label for="title">Titolo</label>
+                        <input type="text" id="title" name="title" placeholder="Cerca per titolo...">
+                    </div>
+                    <div class="form-group">
+                        <label for="description">Descrizione</label>
+                        <input type="text" id="description" name="description" placeholder="Cerca nella descrizione...">
+                    </div>
+                    <div class="form-group">
+                        <label for="categories">Categorie</label>
+                        <select id="categories" name="categories" multiple>
+                            <option value="Film">Film</option>
+                            <option value="Serie TV">Serie TV</option>
+                            <option value="Musica">Musica</option>
+                            <option value="Software">Software</option>
+                            <option value="Libri">Libri</option>
+                            <option value="Documentari">Documentari</option>
+                            <option value="Giochi">Giochi</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="date-from">Data da</label>
+                        <input type="date" id="date-from" name="date_from">
+                    </div>
+                    <div class="form-group">
+                        <label for="date-to">Data a</label>
+                        <input type="date" id="date-to" name="date_to">
+                    </div>
+                    <div class="form-group">
+                        <label for="sort-by">Ordina per</label>
+                        <select id="sort-by" name="sort_by">
+                            <option value="date">Data</option>
+                            <option value="size">Dimensione</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="order">Ordinamento</label>
+                        <select id="order" name="order">
+                            <option value="desc">Decrescente</option>
+                            <option value="asc">Crescente</option>
+                        </select>
+                    </div>
+                    <div class="form-group full-width">
+                        <button type="submit">Cerca</button>
+                    </div>
+                </form>
+            </div>
+
+            <div id="search-results" class="torrents-grid">
+                <!-- Risultati della ricerca -->
+            </div>
+        </section>
+
+        <!-- Upload Form -->
+        <section id="upload-page" style="display: none;">
+            <div class="search-section">
+                <h2>Carica Nuovo Torrent</h2>
+                <form id="upload-form">
+                    <div class="form-group">
+                        <label for="upload-title">Titolo *</label>
+                        <input type="text" id="upload-title" name="title" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="upload-description">Descrizione (max 160 caratteri) *</label>
+                        <textarea id="upload-description" name="description" maxlength="160" required></textarea>
+                        <small>Caratteri rimanenti: <span id="char-count">160</span></small>
+                    </div>
+                    <div class="form-group">
+                        <label for="upload-size">Dimensione (MB) *</label>
+                        <input type="number" id="upload-size" name="size" required min="1">
+                    </div>
+                    <div class="form-group">
+                        <label for="upload-categories">Categorie *</label>
+                        <select id="upload-categories" name="categories" multiple required>
+                            <option value="Film">Film</option>
+                            <option value="Serie TV">Serie TV</option>
+                            <option value="Musica">Musica</option>
+                            <option value="Software">Software</option>
+                            <option value="Libri">Libri</option>
+                            <option value="Documentari">Documentari</option>
+                            <option value="Giochi">Giochi</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="upload-images">Immagini (URL separati da virgola)</label>
+                        <input type="text" id="upload-images" name="images" placeholder="https://example.com/image1.jpg, https://example.com/image2.jpg">
+                    </div>
+                    <button type="submit">Carica Torrent</button>
+                </form>
+            </div>
+        </section>
+
+        <!-- Torrent Details Page -->
+        <section id="torrent-details-page" style="display: none;">
+            <div class="search-section">
+                <button onclick="showHome()" style="margin-bottom: 1rem;">← Torna alla Ricerca</button>
+                <div id="torrent-details-content">
+                    <!-- Dettagli del torrent -->
+                </div>
+            </div>
+        </section>
+
+        <!-- Admin Panel -->
+        <section id="admin-page" style="display: none;">
+            <div class="search-section">
+                <h2>Pannello Amministratore</h2>
+                
+                <div class="admin-section">
+                    <h3>Gestione Utenti</h3>
+                    <div class="form-group">
+                        <label for="search-username">Cerca Utente per Username:</label>
+                        <input type="text" id="search-username" placeholder="Inserisci username">
+                        <button onclick="searchUsers()">Cerca Utente</button>
+                    </div>
+                    <div id="users-results" style="margin-top: 1rem;">
+                        <!-- Risultati ricerca utenti -->
+                    </div>
+                </div>
+
+                <div class="admin-section">
+                    <h3>Statistiche</h3>
+                    <button onclick="loadAdminStats()">Carica Statistiche</button>
+                    <div id="admin-stats-content">
+                        <!-- Contenuto statistiche admin -->
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Form di Login/Registrazione -->
+        <section id="auth-page" style="display: none;">
+            <div class="search-section">
+                <div id="login-form" class="auth-forms">
+                    <h2>Login</h2>
+                    <form id="login-form-element">
+                        <div class="form-group">
+                            <label for="login-username">Username o Email *</label>
+                            <input type="text" id="login-username" name="username" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="login-password">Password *</label>
+                            <input type="password" id="login-password" name="password" required>
+                        </div>
+                        <button type="submit">Login</button>
+                    </form>
+                    <div class="form-toggle">
+                        <a id="show-register">Non hai un account? Registrati</a>
+                    </div>
+                </div>
+
+                <div id="register-form" class="auth-forms">
+                    <h2>Registrati</h2>
+                    <form id="register-form-element">
+                        <div class="form-group">
+                            <label for="register-username">Username *</label>
+                            <input type="text" id="register-username" name="username" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="register-email">Email *</label>
+                            <input type="email" id="register-email" name="email" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="register-password">Password *</label>
+                            <input type="password" id="register-password" name="password" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="register-admin-code">Codice Admin (opzionale)</label>
+                            <input type="text" id="register-admin-code" name="admin_code" placeholder="Inserisci solo se vuoi essere admin">
+                            <small>Lascia vuoto per registrarti come utente normale</small>
+                        </div>
+                        <button type="submit">Registrati</button>
+                    </form>
+                    <div class="form-toggle">
+                        <a id="show-login">Hai già un account? Login</a>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
