@@ -1,7 +1,7 @@
 from flask import Flask, request, jsonify, session, render_template
 from flask_cors import CORS
 from pymongo import MongoClient
-from datetime import datetime
+from datetime import datetime, timedelta
 from bson.objectid import ObjectId
 from bson.errors import InvalidId
 import re
@@ -411,6 +411,7 @@ def delete_comment():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+# Statistiche avanzate (solo admin)
 # Statistiche (solo admin)
 @app.route('/api/admin/stats')
 def admin_stats():
@@ -418,38 +419,187 @@ def admin_stats():
         if session.get('role') != 'admin':
             return jsonify({'error': 'Admin access required'}), 403
         
-        # Torrent più popolari per download
+        # Data di una settimana fa
+        one_week_ago = datetime.now() - timedelta(days=7)
+        
+        # 1. Torrent più popolari per download
         popular_by_downloads = list(COLLECTIONS['torrents'].find().sort('download_count', -1).limit(10))
         
-        # Torrent con miglior rating
-        popular_by_rating = list(COLLECTIONS['torrents'].find({'average_rating': {'$gte': 0}}).sort('average_rating', -1).limit(10))
+        # 2. Torrent con miglior rating
+        popular_by_rating = list(COLLECTIONS['torrents'].find({
+            'average_rating': {'$gte': 0}
+        }).sort('average_rating', -1).limit(10))
         
-        # Statistiche per categoria
-        pipeline = [
+        # 3. Nuovi torrent per categoria nell'ultima settimana
+        pipeline_weekly = [
+            {'$match': {'upload_date': {'$gte': one_week_ago}}},
             {'$unwind': '$categories'},
             {'$group': {
                 '_id': '$categories',
-                'count': {'$sum': 1},
+                'new_torrents_count': {'$sum': 1},
                 'total_downloads': {'$sum': '$download_count'},
                 'avg_rating': {'$avg': '$average_rating'}
-            }}
+            }},
+            {'$sort': {'new_torrents_count': -1}}
         ]
         
-        category_stats = list(COLLECTIONS['torrents'].aggregate(pipeline))
+        weekly_stats = list(COLLECTIONS['torrents'].aggregate(pipeline_weekly))
         
-        # Converti ObjectId
-        for torrent in popular_by_downloads + popular_by_rating:
+        # 4. Categorie più popolari in assoluto
+        pipeline_categories = [
+            {'$unwind': '$categories'},
+            {'$group': {
+                '_id': '$categories',
+                'total_torrents': {'$sum': 1},
+                'total_downloads': {'$sum': '$download_count'},
+                'avg_rating': {'$avg': '$average_rating'},
+                'avg_size': {'$avg': '$size'}
+            }},
+            {'$sort': {'total_downloads': -1}}
+        ]
+        
+        category_stats = list(COLLECTIONS['torrents'].aggregate(pipeline_categories))
+        
+        # 5. Statistiche generali
+        total_torrents = COLLECTIONS['torrents'].count_documents({})
+        total_users = COLLECTIONS['users'].count_documents({})
+        total_comments = COLLECTIONS['comments'].count_documents({})
+        total_downloads = COLLECTIONS['torrents'].aggregate([
+            {'$group': {'_id': None, 'total': {'$sum': '$download_count'}}}
+        ])
+        total_downloads_result = list(total_downloads)
+        total_downloads_count = total_downloads_result[0]['total'] if total_downloads_result else 0
+        
+        # 6. Torrent caricati nell'ultima settimana
+        new_torrents_week = COLLECTIONS['torrents'].count_documents({
+            'upload_date': {'$gte': one_week_ago}
+        })
+        
+        # Converti tutti gli ObjectId in stringhe
+        for torrent in popular_by_downloads:
             torrent['_id'] = str(torrent['_id'])
+            torrent['uploader_id'] = str(torrent.get('uploader_id', ''))
+        
+        for torrent in popular_by_rating:
+            torrent['_id'] = str(torrent['_id'])
+            torrent['uploader_id'] = str(torrent.get('uploader_id', ''))
+        
+        # Converti i risultati delle aggregazioni
+        def convert_aggregation_results(results):
+            converted = []
+            for item in results:
+                # Crea una copia dell'item senza i campi ObjectId
+                converted_item = {}
+                for key, value in item.items():
+                    if isinstance(value, ObjectId):
+                        converted_item[key] = str(value)
+                    else:
+                        converted_item[key] = value
+                converted.append(converted_item)
+            return converted
+        
+        weekly_stats_converted = convert_aggregation_results(weekly_stats)
+        category_stats_converted = convert_aggregation_results(category_stats)
         
         return jsonify({
+            'general_stats': {
+                'total_torrents': total_torrents,
+                'total_users': total_users,
+                'total_comments': total_comments,
+                'total_downloads': total_downloads_count,
+                'new_torrents_week': new_torrents_week
+            },
             'by_downloads': popular_by_downloads,
             'by_rating': popular_by_rating,
-            'categories': category_stats
+            'weekly_by_category': weekly_stats_converted,
+            'categories_overall': category_stats_converted
         })
         
     except Exception as e:
+        print(f"Error in admin stats: {e}")  # Debug
         return jsonify({'error': str(e)}), 500
 
+# Statistiche per periodo personalizzato
+@app.route('/api/admin/stats/period', methods=['POST'])
+def stats_by_period():
+    try:
+        if session.get('role') != 'admin':
+            return jsonify({'error': 'Admin access required'}), 403
+        
+        data = request.json
+        date_from = data.get('date_from')
+        date_to = data.get('date_to')
+        
+        if not date_from or not date_to:
+            return jsonify({'error': 'Date range required'}), 400
+        
+        try:
+            start_date = datetime.fromisoformat(date_from.replace('Z', '+00:00'))
+            end_date = datetime.fromisoformat(date_to.replace('Z', '+00:00'))
+        except ValueError:
+            return jsonify({'error': 'Invalid date format'}), 400
+        
+        # Statistiche per categoria nel periodo specificato
+        pipeline_period = [
+            {'$match': {
+                'upload_date': {
+                    '$gte': start_date,
+                    '$lte': end_date
+                }
+            }},
+            {'$unwind': '$categories'},
+            {'$group': {
+                '_id': '$categories',
+                'torrents_count': {'$sum': 1},
+                'total_downloads': {'$sum': '$download_count'},
+                'avg_rating': {'$avg': '$average_rating'}
+            }},
+            {'$sort': {'total_downloads': -1}}
+        ]
+        
+        period_stats = list(COLLECTIONS['torrents'].aggregate(pipeline_period))
+        
+        # Torrent più popolari nel periodo
+        popular_in_period = list(COLLECTIONS['torrents'].find({
+            'upload_date': {
+                '$gte': start_date,
+                '$lte': end_date
+            }
+        }).sort('download_count', -1).limit(10))
+        
+        # Converti tutti gli ObjectId in stringhe
+        for torrent in popular_in_period:
+            torrent['_id'] = str(torrent['_id'])
+            torrent['uploader_id'] = str(torrent.get('uploader_id', ''))
+        
+        # Funzione helper per convertire risultati aggregazione
+        def convert_aggregation_results(results):
+            converted = []
+            for item in results:
+                converted_item = {}
+                for key, value in item.items():
+                    if isinstance(value, ObjectId):
+                        converted_item[key] = str(value)
+                    else:
+                        converted_item[key] = value
+                converted.append(converted_item)
+            return converted
+        
+        period_stats_converted = convert_aggregation_results(period_stats)
+        
+        return jsonify({
+            'period': {
+                'from': start_date.isoformat(),
+                'to': end_date.isoformat()
+            },
+            'categories_in_period': period_stats_converted,
+            'popular_in_period': popular_in_period
+        })
+        
+    except Exception as e:
+        print(f"Error in period stats: {e}")  # Debug
+        return jsonify({'error': str(e)}), 500
+        
 # Funzione helper per aggiornare il rating
 def update_torrent_rating(torrent_id):
     try:

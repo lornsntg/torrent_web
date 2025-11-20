@@ -438,37 +438,188 @@ async function loadAdminStats() {
     const result = await apiCall('/api/admin/stats');
     if (result.success) {
         const stats = result.data;
-        let html = '<h4>Torrent Più Scaricati</h4>';
+        let html = '';
         
+        // Statistiche generali
+        html += `
+            <div class="stats-general">
+                <h4>📊 Statistiche Generali</h4>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <h5>Totale Torrent</h5>
+                        <span class="stat-number">${stats.general_stats.total_torrents}</span>
+                    </div>
+                    <div class="stat-card">
+                        <h5>Totale Utenti</h5>
+                        <span class="stat-number">${stats.general_stats.total_users}</span>
+                    </div>
+                    <div class="stat-card">
+                        <h5>Totale Commenti</h5>
+                        <span class="stat-number">${stats.general_stats.total_comments}</span>
+                    </div>
+                    <div class="stat-card">
+                        <h5>Download Totali</h5>
+                        <span class="stat-number">${stats.general_stats.total_downloads}</span>
+                    </div>
+                    <div class="stat-card">
+                        <h5>Nuovi Torrent (7gg)</h5>
+                        <span class="stat-number">${stats.general_stats.new_torrents_week}</span>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Torrent più scaricati
+        html += '<h4>🔥 Torrent Più Scaricati</h4>';
         if (stats.by_downloads.length > 0) {
-            stats.by_downloads.forEach(torrent => {
-                html += `<p>${torrent.title} - ${torrent.download_count} download</p>`;
+            stats.by_downloads.forEach((torrent, index) => {
+                html += `
+                    <div class="stat-item">
+                        <span class="rank">${index + 1}.</span>
+                        <span class="torrent-name">${torrent.title}</span>
+                        <span class="stat-value">${torrent.download_count} download</span>
+                    </div>
+                `;
             });
         } else {
             html += '<p>Nessun torrent trovato</p>';
         }
         
-        html += '<h4>Torrent Meglio Valutati</h4>';
+        // Torrent meglio valutati
+        html += '<h4>⭐ Torrent Meglio Valutati</h4>';
         if (stats.by_rating.length > 0) {
-            stats.by_rating.forEach(torrent => {
-                html += `<p>${torrent.title} - ★ ${torrent.average_rating?.toFixed(1) || 'N/A'}</p>`;
+            stats.by_rating.forEach((torrent, index) => {
+                html += `
+                    <div class="stat-item">
+                        <span class="rank">${index + 1}.</span>
+                        <span class="torrent-name">${torrent.title}</span>
+                        <span class="stat-value">★ ${torrent.average_rating?.toFixed(1) || 'N/A'}</span>
+                    </div>
+                `;
             });
         } else {
             html += '<p>Nessun torrent trovato</p>';
         }
         
-        html += '<h4>Statistiche per Categoria</h4>';
-        if (stats.categories.length > 0) {
-            stats.categories.forEach(cat => {
-                html += `<p>${cat._id}: ${cat.count} torrent, ${cat.total_downloads} download, rating ${cat.avg_rating?.toFixed(1) || 'N/A'}</p>`;
+        // Nuovi torrent per categoria (ultima settimana)
+        html += '<h4>📈 Nuovi Torrent per Categoria (Ultima Settimana)</h4>';
+        if (stats.weekly_by_category.length > 0) {
+            stats.weekly_by_category.forEach(cat => {
+                html += `
+                    <div class="stat-item">
+                        <span class="category-name">${cat._id}</span>
+                        <span class="stat-value">${cat.new_torrents_count} nuovi</span>
+                        <span class="stat-subvalue">${cat.total_downloads} download</span>
+                        <span class="stat-subvalue">★ ${cat.avg_rating?.toFixed(1) || 'N/A'}</span>
+                    </div>
+                `;
+            });
+        } else {
+            html += '<p>Nessun nuovo torrent nell\'ultima settimana</p>';
+        }
+        
+        // Categorie più popolari
+        html += '<h4>🏆 Categorie Più Popolari</h4>';
+        if (stats.categories_overall.length > 0) {
+            stats.categories_overall.forEach((cat, index) => {
+                html += `
+                    <div class="stat-item">
+                        <span class="rank">${index + 1}.</span>
+                        <span class="category-name">${cat._id}</span>
+                        <span class="stat-value">${cat.total_torrents} torrent</span>
+                        <span class="stat-subvalue">${cat.total_downloads} download</span>
+                        <span class="stat-subvalue">★ ${cat.avg_rating?.toFixed(1) || 'N/A'}</span>
+                    </div>
+                `;
             });
         } else {
             html += '<p>Nessuna statistica per categoria</p>';
         }
         
+        // Form per statistiche personalizzate
+        html += `
+            <div class="custom-stats">
+                <h4>📅 Statistiche per Periodo Personalizzato</h4>
+                <div class="form-group">
+                    <label for="custom-date-from">Data da:</label>
+                    <input type="date" id="custom-date-from">
+                </div>
+                <div class="form-group">
+                    <label for="custom-date-to">Data a:</label>
+                    <input type="date" id="custom-date-to">
+                </div>
+                <button onclick="loadCustomStats()">Carica Statistiche Personalizzate</button>
+                <div id="custom-stats-results" style="margin-top: 1rem;"></div>
+            </div>
+        `;
+        
         document.getElementById('admin-stats-content').innerHTML = html;
     } else {
         alert('Errore nel caricamento delle statistiche: ' + result.data.error);
+    }
+}
+
+// Carica statistiche personalizzate
+async function loadCustomStats() {
+    const dateFrom = document.getElementById('custom-date-from').value;
+    const dateTo = document.getElementById('custom-date-to').value;
+    
+    if (!dateFrom || !dateTo) {
+        alert('Seleziona entrambe le date');
+        return;
+    }
+    
+    const result = await apiCall('/api/admin/stats/period', {
+        method: 'POST',
+        body: JSON.stringify({
+            date_from: dateFrom,
+            date_to: dateTo
+        })
+    });
+    
+    if (result.success) {
+        const stats = result.data;
+        const container = document.getElementById('custom-stats-results');
+        let html = '';
+        
+        html += `<h5>Periodo: ${new Date(stats.period.from).toLocaleDateString()} - ${new Date(stats.period.to).toLocaleDateString()}</h5>`;
+        
+        // Categorie nel periodo
+        html += '<h6>Categorie nel Periodo</h6>';
+        if (stats.categories_in_period.length > 0) {
+            stats.categories_in_period.forEach(cat => {
+                html += `
+                    <div class="stat-item">
+                        <span class="category-name">${cat._id}</span>
+                        <span class="stat-value">${cat.torrents_count} torrent</span>
+                        <span class="stat-subvalue">${cat.total_downloads} download</span>
+                        <span class="stat-subvalue">★ ${cat.avg_rating?.toFixed(1) || 'N/A'}</span>
+                    </div>
+                `;
+            });
+        } else {
+            html += '<p>Nessun torrent in questo periodo</p>';
+        }
+        
+        // Torrent popolari nel periodo
+        html += '<h6>Torrent Più Scaricati nel Periodo</h6>';
+        if (stats.popular_in_period.length > 0) {
+            stats.popular_in_period.forEach((torrent, index) => {
+                html += `
+                    <div class="stat-item">
+                        <span class="rank">${index + 1}.</span>
+                        <span class="torrent-name">${torrent.title}</span>
+                        <span class="stat-value">${torrent.download_count} download</span>
+                    </div>
+                `;
+            });
+        } else {
+            html += '<p>Nessun torrent in questo periodo</p>';
+        }
+        
+        container.innerHTML = html;
+    } else {
+        alert('Errore nel caricamento delle statistiche personalizzate: ' + result.data.error);
     }
 }
 
