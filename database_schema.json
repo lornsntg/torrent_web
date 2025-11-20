@@ -1,0 +1,77 @@
+{
+  "database_name": "torrent_sharing_db",
+  "collections": {
+    "users": {
+      "description": "Gestione utenti e autenticazione",
+      "schema": {
+        "_id": {"type": "ObjectId", "description": "ID univoco dell'utente"},
+        "username": {"type": "string", "required": true, "unique": true, "description": "Nome utente univoco"},
+        "email": {"type": "string", "required": true, "unique": true, "description": "Email dell'utente"},
+        "password": {"type": "string", "required": true, "description": "Password (in produzione usare hash)"},
+        "role": {"type": "string", "enum": ["user", "admin"], "default": "user", "description": "Ruolo dell'utente"},
+        "registration_date": {"type": "date", "required": true, "description": "Data di registrazione"},
+        "is_banned": {"type": "boolean", "default": false, "description": "Stato ban utente"}
+      },
+      "indexes": [
+        {"username": 1},
+        {"email": 1},
+        {"role": 1}
+      ]
+    },
+    "torrents": {
+      "description": "File torrent caricati dagli utenti",
+      "schema": {
+        "_id": {"type": "ObjectId", "description": "ID univoco del torrent"},
+        "title": {"type": "string", "required": true, "description": "Titolo del torrent"},
+        "description": {"type": "string", "maxLength": 160, "required": true, "description": "Descrizione breve"},
+        "size": {"type": "number", "required": true, "description": "Dimensione in MB"},
+        "categories": {"type": "array", "items": {"type": "string"}, "required": true, "description": "Categorie del torrent"},
+        "images": {"type": "array", "items": {"type": "string"}, "description": "URL immagini del torrent"},
+        "uploader_id": {"type": "ObjectId", "required": true, "ref": "users", "description": "ID utente che ha caricato"},
+        "upload_date": {"type": "date", "required": true, "description": "Data di caricamento"},
+        "download_count": {"type": "number", "default": 0, "description": "Numero di download"},
+        "average_rating": {"type": "number", "default": 0, "min": 0, "max": 5, "description": "Rating medio delle recensioni"}
+      },
+      "indexes": [
+        {"title": "text", "description": "text"},
+        {"categories": 1},
+        {"upload_date": -1},
+        {"download_count": -1},
+        {"average_rating": -1}
+      ]
+    },
+    "comments": {
+      "description": "Commenti e valutazioni sui torrent",
+      "schema": {
+        "_id": {"type": "ObjectId", "description": "ID univoco del commento"},
+        "torrent_id": {"type": "ObjectId", "required": true, "ref": "torrents", "description": "ID torrent referenziato"},
+        "user_id": {"type": "ObjectId", "required": true, "ref": "users", "description": "ID utente che ha commentato"},
+        "text": {"type": "string", "maxLength": 160, "required": true, "description": "Testo del commento"},
+        "rating": {"type": "number", "required": true, "min": 1, "max": 5, "description": "Valutazione da 1 a 5 stelle"},
+        "date": {"type": "date", "required": true, "description": "Data del commento"}
+      },
+      "indexes": [
+        {"torrent_id": 1},
+        {"user_id": 1},
+        {"date": -1}
+      ]
+    },
+    "categories": {
+      "description": "Categorie disponibili per i torrent",
+      "schema": {
+        "_id": {"type": "ObjectId", "description": "ID univoco della categoria"},
+        "name": {"type": "string", "required": true, "unique": true, "description": "Nome categoria"},
+        "created_at": {"type": "date", "required": true, "description": "Data creazione categoria"}
+      },
+      "indexes": [
+        {"name": 1}
+      ]
+    }
+  },
+  "relationships": {
+    "users -> torrents": "one-to-many",
+    "users -> comments": "one-to-many", 
+    "torrents -> comments": "one-to-many",
+    "categories -> torrents": "many-to-many"
+  }
+}
